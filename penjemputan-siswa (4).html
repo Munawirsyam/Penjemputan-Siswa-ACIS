@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Penjemputan Siswa - Aisyah Cendekia</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    :root {
+      --navy: #0f2044; --navy-mid: #1a3460; --blue: #2563eb; --blue-light: #3b82f6;
+      --gold: #f59e0b; --gold-light: #fcd34d; --green: #10b981; --green-bg: #d1fae5;
+      --red: #ef4444; --red-bg: #fee2e2; --gray-50: #f8fafc; --gray-100: #f1f5f9;
+      --gray-200: #e2e8f0; --gray-400: #94a3b8; --gray-600: #475569; --gray-800: #1e293b;
+      --radius: 16px; --shadow: 0 4px 24px rgba(15,32,68,0.10);
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--gray-50); min-height:100vh; color:var(--gray-800); }
+
+    header { background:linear-gradient(135deg,var(--navy),var(--navy-mid)); color:white; position:relative; overflow:hidden; }
+    header::before { content:''; position:absolute; top:-40px; right:-40px; width:200px; height:200px; background:rgba(245,158,11,0.12); border-radius:50%; }
+    .header-inner { display:flex; align-items:center; gap:14px; padding:18px 20px; position:relative; z-index:1; }
+    .school-logo { width:52px; height:52px; background:linear-gradient(135deg,var(--gold),var(--gold-light)); border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0; box-shadow:0 4px 12px rgba(245,158,11,0.4); }
+    .school-info h1 { font-size:15px; font-weight:800; line-height:1.2; }
+    .school-info p { font-size:11px; color:rgba(255,255,255,0.65); font-style:italic; margin-top:2px; }
+    .header-time { margin-left:auto; text-align:right; }
+    .header-time .time { font-size:22px; font-weight:700; color:var(--gold-light); font-variant-numeric:tabular-nums; }
+    .header-time .date { font-size:10px; color:rgba(255,255,255,0.55); }
+
+    .db-status { display:flex; align-items:center; gap:8px; padding:8px 20px; font-size:12px; font-weight:600; }
+    .db-status.loading { background:#fef9c3; color:#a16207; }
+    .db-status.ok { background:#dcfce7; color:#166534; }
+    .db-status.error { background:#fee2e2; color:#991b1b; }
+    .db-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .db-status.loading .db-dot { background:#ca8a04; animation:pulse 1s infinite; }
+    .db-status.ok .db-dot { background:#16a34a; }
+    .db-status.error .db-dot { background:#dc2626; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+    .stats-bar { background:white; border-bottom:1px solid var(--gray-200); display:flex; padding:12px 20px; }
+    .stat-item { flex:1; text-align:center; padding:4px 0; border-right:1px solid var(--gray-200); }
+    .stat-item:last-child { border-right:none; }
+    .stat-num { font-size:20px; font-weight:800; color:var(--navy); line-height:1; }
+    .stat-num.green { color:var(--green); }
+    .stat-num.red { color:var(--red); }
+    .stat-label { font-size:10px; color:var(--gray-400); font-weight:500; margin-top:2px; }
+
+    .tabs { display:flex; background:white; border-bottom:2px solid var(--gray-200); padding:0 20px; }
+    .tab-btn { flex:1; padding:12px 8px; border:none; background:none; font-family:inherit; font-size:13px; font-weight:600; color:var(--gray-400); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; }
+    .tab-btn.active { color:var(--blue); border-bottom-color:var(--blue); }
+
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    .container { padding:20px; max-width:480px; margin:auto; }
+
+    .scanner-card { background:white; border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; margin-bottom:16px; }
+    .scanner-header { background:linear-gradient(90deg,var(--navy),var(--navy-mid)); color:white; padding:12px 16px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; }
+    .scanner-dot { width:8px; height:8px; background:var(--green); border-radius:50%; animation:pulse 1.5s infinite; }
+    #reader { width:100%; background:#000; }
+    #reader video { width:100%; display:block; }
+
+    /* ===== RESULT CARD ===== */
+    .result-card { background:white; border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; margin-bottom:16px; }
+    .result-status-bar { padding:14px 16px; display:flex; align-items:center; gap:12px; }
+    .result-status-bar.valid { background:var(--green-bg); }
+    .result-status-bar.invalid { background:var(--red-bg); }
+    .result-status-bar.waiting { background:var(--gray-100); }
+    .status-icon { font-size:28px; }
+    .status-text { font-size:15px; font-weight:700; }
+    .status-text.valid { color:#065f46; }
+    .status-text.invalid { color:#991b1b; }
+    .status-text.waiting { color:var(--gray-600); }
+    .status-sub { font-size:11px; margin-top:2px; }
+    .status-sub.valid { color:#047857; }
+    .status-sub.invalid { color:#b91c1c; }
+    .status-sub.waiting { color:var(--gray-400); }
+
+    /* ===== FOTO SISWA ===== */
+    .foto-wrapper {
+      display: none;
+      padding: 16px 16px 0;
+      animation: fotoMuncul .4s cubic-bezier(.34,1.56,.64,1);
+    }
+    .foto-wrapper.tampil { display: block; }
+    @keyframes fotoMuncul {
+      from { opacity:0; transform:scale(0.85) translateY(8px); }
+      to   { opacity:1; transform:scale(1) translateY(0); }
+    }
+    .foto-inner {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+      border: 2px solid #bfdbfe;
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .foto-inner.invalid-foto {
+      background: linear-gradient(135deg, #fff1f2, #fef9c3);
+      border-color: #fecaca;
+    }
+    .foto-frame {
+      width: 80px;
+      height: 80px;
+      border-radius: 12px;
+      object-fit: cover;
+      flex-shrink: 0;
+      border: 3px solid white;
+      box-shadow: 0 4px 14px rgba(15,32,68,0.18);
+      background: var(--gray-100);
+    }
+    .foto-placeholder {
+      width: 80px;
+      height: 80px;
+      border-radius: 12px;
+      flex-shrink: 0;
+      border: 3px solid white;
+      box-shadow: 0 4px 14px rgba(15,32,68,0.18);
+      background: linear-gradient(135deg, var(--navy), var(--blue));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+    .foto-meta { flex: 1; min-width: 0; }
+    .foto-nama { font-size: 16px; font-weight: 800; color: var(--navy); line-height: 1.2; }
+    .foto-kelas { font-size: 12px; color: var(--gray-600); margin-top: 3px; font-weight: 500; }
+    .foto-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 8px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--green-bg);
+      color: #047857;
+    }
+    .foto-badge.invalid { background: var(--red-bg); color: #991b1b; }
+
+    .result-body { padding:16px; }
+    .result-row { display:flex; justify-content:space-between; align-items:center; padding:9px 0; border-bottom:1px solid var(--gray-100); font-size:13px; }
+    .result-row:last-child { border-bottom:none; }
+    .result-label { color:var(--gray-400); font-weight:500; }
+    .result-value { font-weight:700; color:var(--gray-800); text-align:right; max-width:60%; }
+
+    .scan-again-btn { display:block; width:100%; padding:13px; background:linear-gradient(135deg,var(--blue),var(--blue-light)); color:white; border:none; border-radius:12px; font-family:inherit; font-size:14px; font-weight:700; cursor:pointer; transition:all .2s; box-shadow:0 4px 12px rgba(37,99,235,0.3); }
+    .scan-again-btn:hover { transform:translateY(-1px); }
+
+    .reload-btn { display:block; width:100%; padding:11px; background:white; color:var(--navy); border:2px solid var(--gray-200); border-radius:12px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; margin-bottom:16px; transition:all .2s; }
+    .reload-btn:hover { border-color:var(--blue-light); color:var(--blue); }
+
+    .riwayat-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+    .riwayat-title { font-size:15px; font-weight:700; color:var(--navy); }
+    .clear-btn { font-size:12px; color:var(--red); background:none; border:none; font-family:inherit; cursor:pointer; font-weight:600; }
+
+    .empty-state { text-align:center; padding:40px 20px; color:var(--gray-400); }
+    .empty-state .empty-icon { font-size:48px; margin-bottom:12px; }
+    .empty-state p { font-size:14px; }
+
+    .log-item { background:white; border-radius:12px; box-shadow:var(--shadow); padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; gap:12px; animation:slideIn .3s ease; }
+    @keyframes slideIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .log-avatar { width:40px; height:40px; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+    .log-avatar.valid { background:var(--green-bg); }
+    .log-avatar.invalid { background:var(--red-bg); }
+    .log-avatar img { width:100%; height:100%; object-fit:cover; border-radius:10px; }
+    .log-info { flex:1; min-width:0; }
+    .log-name { font-size:14px; font-weight:700; color:var(--navy); }
+    .log-detail { font-size:12px; color:var(--gray-400); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .log-time { font-size:11px; color:var(--gray-400); font-weight:600; text-align:right; flex-shrink:0; }
+    .log-badge { font-size:10px; font-weight:700; padding:3px 8px; border-radius:20px; margin-top:4px; display:inline-block; }
+    .log-badge.valid { background:var(--green-bg); color:#047857; }
+    .log-badge.invalid { background:var(--red-bg); color:#b91c1c; }
+
+    .siswa-search { position:relative; margin-bottom:14px; }
+    .siswa-search input { width:100%; padding:12px 16px 12px 40px; border:2px solid var(--gray-200); border-radius:12px; font-family:inherit; font-size:14px; color:var(--gray-800); outline:none; transition:border-color .2s; background:white; }
+    .siswa-search input:focus { border-color:var(--blue-light); }
+    .search-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--gray-400); font-size:16px; }
+
+    .siswa-card { background:white; border-radius:12px; box-shadow:var(--shadow); padding:14px 16px; margin-bottom:10px; display:flex; align-items:center; gap:12px; }
+    .siswa-avatar { width:48px; height:48px; border-radius:12px; object-fit:cover; flex-shrink:0; border:2px solid var(--gray-200); }
+    .siswa-avatar-placeholder { width:48px; height:48px; background:linear-gradient(135deg,var(--navy),var(--blue)); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+    .siswa-info { flex:1; min-width:0; }
+    .siswa-name { font-size:14px; font-weight:700; color:var(--navy); }
+    .siswa-detail { font-size:12px; color:var(--gray-400); margin-top:2px; }
+    .siswa-qr { font-size:11px; font-weight:700; color:var(--blue); background:#eff6ff; padding:4px 10px; border-radius:8px; font-family:monospace; flex-shrink:0; }
+
+    /* Info kolom foto */
+    .info-foto { background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:10px 14px; margin-bottom:14px; font-size:12px; color:#92400e; display:flex; gap:8px; align-items:flex-start; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="school-logo">🕌</div>
+    <div class="school-info">
+      <h1>Sistem Penjemputan Siswa</h1>
+      <p>Aisyah Cendekia Islamic School</p>
+    </div>
+    <div class="header-time">
+      <div class="time" id="clock">--:--</div>
+      <div class="date" id="dateDisplay">--</div>
+    </div>
+  </div>
+</header>
+
+<div class="db-status loading" id="dbStatus">
+  <div class="db-dot"></div>
+  <span id="dbStatusText">Menghubungkan ke database Google Sheets...</span>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-item"><div class="stat-num" id="statTotal">0</div><div class="stat-label">Total Scan</div></div>
+  <div class="stat-item"><div class="stat-num green" id="statValid">0</div><div class="stat-label">Valid</div></div>
+  <div class="stat-item"><div class="stat-num red" id="statInvalid">0</div><div class="stat-label">Tidak Valid</div></div>
+  <div class="stat-item"><div class="stat-num" id="statSiswa">-</div><div class="stat-label">Data Siswa</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('scan',this)">📷 Scanner</button>
+  <button class="tab-btn" onclick="switchTab('riwayat',this)">📋 Riwayat</button>
+  <button class="tab-btn" onclick="switchTab('siswa',this)">👧 Data Siswa</button>
+</div>
+
+<!-- TAB SCANNER -->
+<div class="tab-content active" id="tab-scan">
+  <div class="container">
+    <div class="scanner-card">
+      <div class="scanner-header"><div class="scanner-dot"></div>Kamera QR Scanner Aktif</div>
+      <div id="reader"></div>
+    </div>
+
+    <div class="result-card">
+      <div class="result-status-bar waiting" id="statusBar">
+        <div class="status-icon">📱</div>
+        <div>
+          <div class="status-text waiting">Menunggu Scan...</div>
+          <div class="status-sub waiting">Arahkan kamera ke QR Code siswa</div>
+        </div>
+      </div>
+
+      <!-- FOTO SISWA — muncul setelah scan -->
+      <div class="foto-wrapper" id="fotoWrapper">
+        <div class="foto-inner" id="fotoInner">
+          <div class="foto-placeholder" id="fotoPlaceholder">👤</div>
+          <img class="foto-frame" id="fotoImg" src="" alt="Foto Siswa" style="display:none;"
+               onerror="this.style.display='none'; document.getElementById('fotoPlaceholder').style.display='flex';">
+          <div class="foto-meta">
+            <div class="foto-nama" id="fotoNama">-</div>
+            <div class="foto-kelas" id="fotoKelas">-</div>
+            <span class="foto-badge" id="fotoBadge">✅ Penjemputan Valid</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="result-body">
+        <div class="result-row"><span class="result-label">Nama Siswa</span><span class="result-value" id="rNama">-</span></div>
+        <div class="result-row"><span class="result-label">Kelas</span><span class="result-value" id="rKelas">-</span></div>
+        <div class="result-row"><span class="result-label">Penjemput Sah</span><span class="result-value" id="rPenjemput">-</span></div>
+        <div class="result-row"><span class="result-label">Waktu Scan</span><span class="result-value" id="rWaktu">-</span></div>
+      </div>
+    </div>
+    <button class="scan-again-btn" onclick="resetScan()">🔄 Scan Ulang</button>
+  </div>
+</div>
+
+<!-- TAB RIWAYAT -->
+<div class="tab-content" id="tab-riwayat">
+  <div class="container">
+    <div class="riwayat-header">
+      <div class="riwayat-title">Riwayat Penjemputan Hari Ini</div>
+      <button class="clear-btn" onclick="clearLog()">Hapus Semua</button>
+    </div>
+    <div id="logList"><div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada scan hari ini</p></div></div>
+  </div>
+</div>
+
+<!-- TAB DATA SISWA -->
+<div class="tab-content" id="tab-siswa">
+  <div class="container">
+    <button class="reload-btn" onclick="loadDatabase()">🔄 Refresh Data dari Google Sheets</button>
+    <div class="info-foto">
+      💡 <span>Pastikan kolom <strong>foto</strong> di Google Sheets berisi URL foto siswa (link Google Drive, imgBB, dll) agar foto tampil otomatis saat scan.</span>
+    </div>
+    <div class="siswa-search">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Cari nama siswa..." oninput="filterSiswa(this.value)">
+    </div>
+    <div id="siswaList"><div class="empty-state"><div class="empty-icon">⏳</div><p>Memuat data siswa...</p></div></div>
+  </div>
+</div>
+
+<script>
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbw-qeQJ7IWf5NAnNVwec2_4PlV2Ra-GsJkSfc4fT23iFdNwU6YTinfAwIn4KvrTJsRb/exec";
+
+let database = {};
+let scanLog = [];
+let lastScanned = null;
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('dateDisplay').textContent = now.toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function loadDatabase() {
+  const el = document.getElementById('dbStatus');
+  const txt = document.getElementById('dbStatusText');
+  el.className = 'db-status loading';
+  txt.textContent = 'Menghubungkan ke database Google Sheets...';
+
+  fetch(SHEET_URL + "?t=" + Date.now())
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(data => {
+      database = data;
+      const n = Object.keys(database).length;
+      el.className = 'db-status ok';
+      txt.textContent = '✓ Terhubung — ' + n + ' data siswa berhasil dimuat dari Google Sheets';
+      document.getElementById('statSiswa').textContent = n;
+      renderSiswa('');
+    })
+    .catch(() => {
+      el.className = 'db-status error';
+      txt.textContent = '✗ Gagal terhubung ke Google Sheets. Periksa koneksi internet.';
+    });
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'riwayat') renderLog();
+  if (name === 'siswa') renderSiswa(document.getElementById('searchInput').value);
+}
+
+function initScanner() {
+  const qr = new Html5Qrcode("reader");
+  Html5Qrcode.getCameras().then(devices => {
+    if (devices && devices.length) {
+      const cam = devices.find(d => d.label.toLowerCase().includes('back')) || devices[devices.length-1];
+      qr.start(cam.id, {fps:10, qrbox:{width:240,height:240}}, onScan);
+    }
+  }).catch(e => console.warn("Kamera:", e));
+}
+
+function onScan(code) {
+  if (code === lastScanned) return;
+  lastScanned = code;
+  const key = code.trim().toUpperCase();
+  const siswa = database[key];
+  const now = new Date();
+  const t = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  if (siswa) {
+    showResult(true, siswa, t);
+    addLog({valid:true, nama:siswa.nama, kelas:siswa.kelas, penjemput:siswa.penjemput, emoji:siswa.emoji||'👤', foto:siswa.foto||'', time:t, code:key});
+  } else {
+    showResult(false, null, t);
+    addLog({valid:false, nama:'QR Tidak Dikenali', kelas:'-', penjemput:'-', emoji:'❓', foto:'', time:t, code:key});
+  }
+  updateStats();
+  setTimeout(() => { lastScanned = null; }, 3000);
+}
+
+function showResult(valid, siswa, t) {
+  const bar = document.getElementById('statusBar');
+  const fotoWrapper = document.getElementById('fotoWrapper');
+  const fotoInner = document.getElementById('fotoInner');
+  const fotoImg = document.getElementById('fotoImg');
+  const fotoPlaceholder = document.getElementById('fotoPlaceholder');
+  const fotoBadge = document.getElementById('fotoBadge');
+
+  if (valid) {
+    // Status bar
+    bar.className = 'result-status-bar valid';
+    bar.innerHTML = `<div class="status-icon">✅</div><div><div class="status-text valid">Penjemputan Valid</div><div class="status-sub valid">Siswa boleh dibawa pulang</div></div>`;
+
+    // Isi data teks
+    document.getElementById('rNama').textContent = siswa.nama;
+    document.getElementById('rKelas').textContent = siswa.kelas;
+    document.getElementById('rPenjemput').textContent = siswa.penjemput;
+
+    // Tampilkan foto
+    fotoWrapper.classList.add('tampil');
+    fotoInner.className = 'foto-inner';
+    document.getElementById('fotoNama').textContent = siswa.nama;
+    document.getElementById('fotoKelas').textContent = siswa.kelas + ' · Penjemput: ' + siswa.penjemput;
+    fotoBadge.className = 'foto-badge';
+    fotoBadge.textContent = '✅ Penjemputan Valid';
+
+    // Coba tampilkan foto dari URL
+    const urlFoto = siswa.foto || '';
+    if (urlFoto && urlFoto.startsWith('http')) {
+      fotoImg.src = urlFoto;
+      fotoImg.style.display = 'block';
+      fotoPlaceholder.style.display = 'none';
+    } else {
+      // Tidak ada foto, pakai emoji
+      fotoImg.style.display = 'none';
+      fotoPlaceholder.style.display = 'flex';
+      fotoPlaceholder.textContent = siswa.emoji || '👤';
+    }
+
+  } else {
+    // Status bar invalid
+    bar.className = 'result-status-bar invalid';
+    bar.innerHTML = `<div class="status-icon">❌</div><div><div class="status-text invalid">QR Tidak Dikenali</div><div class="status-sub invalid">Hubungi petugas sekolah</div></div>`;
+
+    document.getElementById('rNama').textContent = '-';
+    document.getElementById('rKelas').textContent = '-';
+    document.getElementById('rPenjemput').textContent = '-';
+
+    // Tampilkan foto area dengan status invalid
+    fotoWrapper.classList.add('tampil');
+    fotoInner.className = 'foto-inner invalid-foto';
+    document.getElementById('fotoNama').textContent = 'Tidak Dikenali';
+    document.getElementById('fotoKelas').textContent = 'QR Code tidak terdaftar di sistem';
+    fotoBadge.className = 'foto-badge invalid';
+    fotoBadge.textContent = '❌ Tidak Valid';
+    fotoImg.style.display = 'none';
+    fotoPlaceholder.style.display = 'flex';
+    fotoPlaceholder.textContent = '❓';
+  }
+
+  document.getElementById('rWaktu').textContent = t;
+}
+
+function resetScan() {
+  lastScanned = null;
+  const bar = document.getElementById('statusBar');
+  bar.className = 'result-status-bar waiting';
+  bar.innerHTML = `<div class="status-icon">📱</div><div><div class="status-text waiting">Menunggu Scan...</div><div class="status-sub waiting">Arahkan kamera ke QR Code siswa</div></div>`;
+  ['rNama','rKelas','rPenjemput','rWaktu'].forEach(id => document.getElementById(id).textContent = '-');
+
+  // Sembunyikan foto
+  document.getElementById('fotoWrapper').classList.remove('tampil');
+  document.getElementById('fotoImg').src = '';
+}
+
+function addLog(e) { scanLog.unshift(e); }
+
+function renderLog() {
+  const el = document.getElementById('logList');
+  if (!scanLog.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada scan hari ini</p></div>`; return; }
+  el.innerHTML = scanLog.map(e => {
+    const avatarHtml = (e.foto && e.foto.startsWith('http'))
+      ? `<img src="${e.foto}" style="width:40px;height:40px;border-radius:10px;object-fit:cover;" onerror="this.outerHTML='<div class=\\'log-avatar ${e.valid?'valid':'invalid'}\\'>${e.emoji}</div>'">`
+      : `<div class="log-avatar ${e.valid?'valid':'invalid'}">${e.emoji}</div>`;
+    return `<div class="log-item">
+      ${avatarHtml}
+      <div class="log-info">
+        <div class="log-name">${e.nama}</div>
+        <div class="log-detail">${e.kelas!=='-'?e.kelas+' · ':''}${e.penjemput!=='-'?e.penjemput:'Kode: '+e.code}</div>
+        <span class="log-badge ${e.valid?'valid':'invalid'}">${e.valid?'✅ Valid':'❌ Tidak Valid'}</span>
+      </div>
+      <div class="log-time">${e.time}</div>
+    </div>`;
+  }).join('');
+}
+
+function clearLog() {
+  if (confirm('Hapus semua riwayat hari ini?')) { scanLog=[]; updateStats(); renderLog(); }
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = scanLog.length;
+  document.getElementById('statValid').textContent = scanLog.filter(e=>e.valid).length;
+  document.getElementById('statInvalid').textContent = scanLog.filter(e=>!e.valid).length;
+}
+
+function renderSiswa(query) {
+  const el = document.getElementById('siswaList');
+  const keys = Object.keys(database);
+  if (!keys.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Data belum termuat dari Google Sheets.</p></div>`; return; }
+  const q = query.toLowerCase();
+  const filtered = keys.filter(code => {
+    const s = database[code];
+    return s.nama.toLowerCase().includes(q) || s.kelas.toLowerCase().includes(q) || code.toLowerCase().includes(q);
+  });
+  if (!filtered.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Siswa tidak ditemukan</p></div>`; return; }
+  el.innerHTML = filtered.map(code => {
+    const s = database[code];
+    const fotoHtml = (s.foto && s.foto.startsWith('http'))
+      ? `<img class="siswa-avatar" src="${s.foto}" alt="${s.nama}" onerror="this.outerHTML='<div class=\\'siswa-avatar-placeholder\\'>${s.emoji||'👤'}</div>'">`
+      : `<div class="siswa-avatar-placeholder">${s.emoji||'👤'}</div>`;
+    return `<div class="siswa-card">
+      ${fotoHtml}
+      <div class="siswa-info">
+        <div class="siswa-name">${s.nama}</div>
+        <div class="siswa-detail">${s.kelas} · ${s.penjemput}</div>
+      </div>
+      <div class="siswa-qr">${code}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterSiswa(val) { renderSiswa(val); }
+
+loadDatabase();
+initScanner();
+</script>
+</body>
+</html>
