@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Sistem Kehadiran & Penjemputan - Aisyah Cendekia</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    :root {
+      --navy: #0f2044; --navy-mid: #1a3460; --blue: #2563eb; --blue-light: #3b82f6;
+      --gold: #f59e0b; --gold-light: #fcd34d; --green: #10b981; --green-bg: #d1fae5;
+      --red: #ef4444; --red-bg: #fee2e2; --orange: #f97316; --orange-bg: #ffedd5;
+      --purple: #8b5cf6; --purple-bg: #ede9fe;
+      --gray-50: #f8fafc; --gray-100: #f1f5f9; --gray-200: #e2e8f0;
+      --gray-400: #94a3b8; --gray-600: #475569; --gray-800: #1e293b;
+      --radius: 16px; --shadow: 0 4px 24px rgba(15,32,68,0.10);
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Plus Jakarta Sans',sans-serif; background:var(--gray-50); min-height:100vh; color:var(--gray-800); }
+
+    header { background:linear-gradient(135deg,var(--navy),var(--navy-mid)); color:white; position:relative; overflow:hidden; }
+    header::before { content:''; position:absolute; top:-40px; right:-40px; width:200px; height:200px; background:rgba(245,158,11,0.12); border-radius:50%; }
+    .header-inner { display:flex; align-items:center; gap:14px; padding:18px 20px; position:relative; z-index:1; }
+    .school-logo { width:52px; height:52px; background:linear-gradient(135deg,var(--gold),var(--gold-light)); border-radius:14px; display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0; box-shadow:0 4px 12px rgba(245,158,11,0.4); }
+    .school-info h1 { font-size:15px; font-weight:800; line-height:1.2; }
+    .school-info p { font-size:11px; color:rgba(255,255,255,0.65); font-style:italic; margin-top:2px; }
+    .header-time { margin-left:auto; text-align:right; }
+    .header-time .time { font-size:22px; font-weight:700; color:var(--gold-light); font-variant-numeric:tabular-nums; }
+    .header-time .date { font-size:10px; color:rgba(255,255,255,0.55); }
+
+    .db-status { display:flex; align-items:center; gap:8px; padding:8px 20px; font-size:12px; font-weight:600; }
+    .db-status.loading { background:#fef9c3; color:#a16207; }
+    .db-status.ok { background:#dcfce7; color:#166534; }
+    .db-status.error { background:#fee2e2; color:#991b1b; }
+    .db-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .db-status.loading .db-dot { background:#ca8a04; animation:pulse 1s infinite; }
+    .db-status.ok .db-dot { background:#16a34a; }
+    .db-status.error .db-dot { background:#dc2626; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+    .stats-bar { background:white; border-bottom:1px solid var(--gray-200); display:flex; padding:10px 16px; }
+    .stat-item { flex:1; text-align:center; padding:4px 2px; border-right:1px solid var(--gray-200); }
+    .stat-item:last-child { border-right:none; }
+    .stat-num { font-size:17px; font-weight:800; color:var(--navy); line-height:1; }
+    .stat-num.green { color:var(--green); }
+    .stat-num.red { color:var(--red); }
+    .stat-num.orange { color:var(--orange); }
+    .stat-num.purple { color:var(--purple); }
+    .stat-label { font-size:9px; color:var(--gray-400); font-weight:500; margin-top:2px; line-height:1.2; }
+
+    .tabs { display:flex; background:white; border-bottom:2px solid var(--gray-200); padding:0 8px; overflow-x:auto; }
+    .tab-btn { flex:1; min-width:72px; padding:11px 4px; border:none; background:none; font-family:inherit; font-size:11px; font-weight:600; color:var(--gray-400); cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; transition:all .2s; white-space:nowrap; }
+    .tab-btn.active { color:var(--blue); border-bottom-color:var(--blue); }
+
+    .tab-content { display:none; }
+    .tab-content.active { display:block; }
+    .container { padding:16px; max-width:480px; margin:auto; }
+
+    .scanner-card { background:white; border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; margin-bottom:14px; }
+    .scanner-header { color:white; padding:12px 16px; font-size:13px; font-weight:600; display:flex; align-items:center; gap:8px; }
+    .scanner-header.checkin { background:linear-gradient(90deg,#065f46,#10b981); }
+    .scanner-header.jemput { background:linear-gradient(90deg,var(--navy),var(--navy-mid)); }
+    .scanner-dot { width:8px; height:8px; background:rgba(255,255,255,0.8); border-radius:50%; animation:pulse 1.5s infinite; }
+    #reader-checkin, #reader-jemput { width:100%; background:#000; }
+    #reader-checkin video, #reader-jemput video { width:100%; display:block; }
+
+    .result-card { background:white; border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; margin-bottom:14px; }
+    .result-status-bar { padding:14px 16px; display:flex; align-items:center; gap:12px; }
+    .result-status-bar.valid { background:var(--green-bg); }
+    .result-status-bar.invalid { background:var(--red-bg); }
+    .result-status-bar.waiting { background:var(--gray-100); }
+    .result-status-bar.warning { background:var(--orange-bg); }
+    .status-icon { font-size:28px; }
+    .status-text { font-size:15px; font-weight:700; }
+    .status-text.valid { color:#065f46; }
+    .status-text.invalid { color:#991b1b; }
+    .status-text.waiting { color:var(--gray-600); }
+    .status-text.warning { color:#9a3412; }
+    .status-sub { font-size:11px; margin-top:2px; }
+    .status-sub.valid { color:#047857; }
+    .status-sub.invalid { color:#b91c1c; }
+    .status-sub.waiting { color:var(--gray-400); }
+    .status-sub.warning { color:#c2410c; }
+
+    .foto-wrapper { display:none; padding:14px 14px 0; animation:fotoMuncul .4s cubic-bezier(.34,1.56,.64,1); }
+    .foto-wrapper.tampil { display:block; }
+    @keyframes fotoMuncul { from{opacity:0;transform:scale(0.85) translateY(8px)} to{opacity:1;transform:scale(1) translateY(0)} }
+    .foto-inner { display:flex; align-items:center; gap:14px; border-radius:14px; padding:14px; border:2px solid; }
+    .foto-inner.valid-foto { background:linear-gradient(135deg,#eff6ff,#f0fdf4); border-color:#bfdbfe; }
+    .foto-inner.invalid-foto { background:linear-gradient(135deg,#fff1f2,#fef9c3); border-color:#fecaca; }
+    .foto-inner.warning-foto { background:linear-gradient(135deg,#fff7ed,#fef9c3); border-color:#fed7aa; }
+    .foto-frame { width:80px; height:80px; border-radius:12px; object-fit:cover; flex-shrink:0; border:3px solid white; box-shadow:0 4px 14px rgba(15,32,68,0.18); }
+    .foto-placeholder { width:80px; height:80px; border-radius:12px; flex-shrink:0; border:3px solid white; box-shadow:0 4px 14px rgba(15,32,68,0.18); background:linear-gradient(135deg,var(--navy),var(--blue)); display:flex; align-items:center; justify-content:center; font-size:36px; }
+    .foto-meta { flex:1; min-width:0; }
+    .foto-nama { font-size:16px; font-weight:800; color:var(--navy); line-height:1.2; }
+    .foto-kelas { font-size:12px; color:var(--gray-600); margin-top:3px; font-weight:500; }
+    .foto-badge { display:inline-flex; align-items:center; gap:4px; margin-top:8px; font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; }
+    .foto-badge.valid { background:var(--green-bg); color:#047857; }
+    .foto-badge.invalid { background:var(--red-bg); color:#991b1b; }
+    .foto-badge.warning { background:var(--orange-bg); color:#9a3412; }
+
+    .result-body { padding:14px; }
+    .result-row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--gray-100); font-size:13px; }
+    .result-row:last-child { border-bottom:none; }
+    .result-label { color:var(--gray-400); font-weight:500; }
+    .result-value { font-weight:700; color:var(--gray-800); text-align:right; max-width:60%; }
+
+    .btn-row { display:flex; gap:10px; margin-bottom:14px; }
+    .action-btn { flex:1; padding:13px; border:none; border-radius:12px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; gap:6px; }
+    .btn-scan { background:linear-gradient(135deg,var(--blue),var(--blue-light)); color:white; box-shadow:0 4px 12px rgba(37,99,235,0.3); }
+    .btn-wa { background:linear-gradient(135deg,#16a34a,#22c55e); color:white; box-shadow:0 4px 12px rgba(22,163,74,0.3); }
+    .btn-wa:disabled { background:#94a3b8; box-shadow:none; cursor:not-allowed; opacity:0.6; }
+    .action-btn:hover:not(:disabled) { transform:translateY(-1px); }
+
+    .reload-btn { display:block; width:100%; padding:11px; background:white; color:var(--navy); border:2px solid var(--gray-200); border-radius:12px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; margin-bottom:14px; transition:all .2s; }
+    .reload-btn:hover { border-color:var(--blue-light); color:var(--blue); }
+
+    .monitoring-filter { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+    .filter-btn { padding:7px 12px; border-radius:20px; border:2px solid var(--gray-200); background:white; font-family:inherit; font-size:11px; font-weight:600; color:var(--gray-600); cursor:pointer; transition:all .2s; }
+    .filter-btn.active { border-color:var(--blue); color:var(--blue); background:#eff6ff; }
+
+    .monitor-card { background:white; border-radius:12px; box-shadow:var(--shadow); padding:14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; }
+    .monitor-foto { width:46px; height:46px; border-radius:10px; object-fit:cover; flex-shrink:0; border:2px solid var(--gray-200); }
+    .monitor-foto-placeholder { width:46px; height:46px; border-radius:10px; flex-shrink:0; background:linear-gradient(135deg,var(--navy),var(--blue)); display:flex; align-items:center; justify-content:center; font-size:22px; }
+    .monitor-info { flex:1; min-width:0; }
+    .monitor-nama { font-size:14px; font-weight:700; color:var(--navy); }
+    .monitor-detail { font-size:11px; color:var(--gray-400); margin-top:2px; }
+    .monitor-status { flex-shrink:0; text-align:right; }
+    .status-badge { font-size:10px; font-weight:700; padding:4px 10px; border-radius:20px; display:inline-block; }
+    .status-badge.hadir { background:var(--green-bg); color:#047857; }
+    .status-badge.dijemput { background:var(--purple-bg); color:#6d28d9; }
+    .status-badge.belum { background:var(--gray-100); color:var(--gray-600); }
+    .monitor-time { font-size:10px; color:var(--gray-400); margin-top:3px; }
+
+    .riwayat-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+    .riwayat-title { font-size:15px; font-weight:700; color:var(--navy); }
+    .clear-btn { font-size:12px; color:var(--red); background:none; border:none; font-family:inherit; cursor:pointer; font-weight:600; }
+
+    .log-item { background:white; border-radius:12px; box-shadow:var(--shadow); padding:12px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; animation:slideIn .3s ease; }
+    @keyframes slideIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .log-avatar { width:40px; height:40px; border-radius:10px; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+    .log-avatar.checkin { background:#dcfce7; }
+    .log-avatar.jemput { background:#ede9fe; }
+    .log-avatar.invalid { background:var(--red-bg); }
+    .log-avatar img { width:100%; height:100%; object-fit:cover; }
+    .log-info { flex:1; min-width:0; }
+    .log-name { font-size:13px; font-weight:700; color:var(--navy); }
+    .log-detail { font-size:11px; color:var(--gray-400); margin-top:2px; }
+    .log-type { font-size:10px; font-weight:700; padding:3px 8px; border-radius:20px; margin-top:4px; display:inline-block; }
+    .log-type.checkin { background:#dcfce7; color:#047857; }
+    .log-type.jemput { background:#ede9fe; color:#6d28d9; }
+    .log-type.invalid { background:var(--red-bg); color:#b91c1c; }
+    .log-time { font-size:11px; color:var(--gray-400); font-weight:600; text-align:right; flex-shrink:0; }
+
+    .siswa-search { position:relative; margin-bottom:14px; }
+    .siswa-search input { width:100%; padding:12px 16px 12px 40px; border:2px solid var(--gray-200); border-radius:12px; font-family:inherit; font-size:14px; color:var(--gray-800); outline:none; transition:border-color .2s; background:white; }
+    .siswa-search input:focus { border-color:var(--blue-light); }
+    .search-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--gray-400); font-size:16px; }
+    .siswa-card { background:white; border-radius:12px; box-shadow:var(--shadow); padding:12px 14px; margin-bottom:10px; display:flex; align-items:center; gap:12px; }
+    .siswa-avatar { width:46px; height:46px; border-radius:12px; object-fit:cover; flex-shrink:0; border:2px solid var(--gray-200); }
+    .siswa-avatar-placeholder { width:46px; height:46px; background:linear-gradient(135deg,var(--navy),var(--blue)); border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+    .siswa-info { flex:1; min-width:0; }
+    .siswa-name { font-size:14px; font-weight:700; color:var(--navy); }
+    .siswa-detail { font-size:12px; color:var(--gray-400); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .siswa-qr { font-size:11px; font-weight:700; color:var(--blue); background:#eff6ff; padding:4px 10px; border-radius:8px; font-family:monospace; flex-shrink:0; }
+
+    .empty-state { text-align:center; padding:40px 20px; color:var(--gray-400); }
+    .empty-state .empty-icon { font-size:48px; margin-bottom:12px; }
+    .empty-state p { font-size:14px; }
+
+    .wa-popup { display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#16a34a; color:white; padding:12px 20px; border-radius:12px; font-size:13px; font-weight:600; box-shadow:0 8px 24px rgba(22,163,74,0.4); z-index:999; max-width:90%; text-align:center; }
+    .wa-popup.show { display:block; animation:popIn .3s ease; }
+    @keyframes popIn { from{opacity:0;transform:translateX(-50%) translateY(20px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="school-logo">🕌</div>
+    <div class="school-info">
+      <h1>Kehadiran & Penjemputan</h1>
+      <p>Aisyah Cendekia Islamic School</p>
+    </div>
+    <div class="header-time">
+      <div class="time" id="clock">--:--</div>
+      <div class="date" id="dateDisplay">--</div>
+    </div>
+  </div>
+</header>
+
+<div class="db-status loading" id="dbStatus">
+  <div class="db-dot"></div>
+  <span id="dbStatusText">Menghubungkan ke database Google Sheets...</span>
+</div>
+
+<div class="stats-bar">
+  <div class="stat-item"><div class="stat-num" id="statSiswa">-</div><div class="stat-label">Total Siswa</div></div>
+  <div class="stat-item"><div class="stat-num green" id="statHadir">0</div><div class="stat-label">Hadir</div></div>
+  <div class="stat-item"><div class="stat-num orange" id="statBelum">0</div><div class="stat-label">Belum Hadir</div></div>
+  <div class="stat-item"><div class="stat-num green" id="statMenunggu">0</div><div class="stat-label">Menunggu Jemput</div></div>
+  <div class="stat-item"><div class="stat-num purple" id="statDijemput">0</div><div class="stat-label">Dijemput</div></div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('checkin',this)">✅ Check-in</button>
+  <button class="tab-btn" id="tabBtnJemput" onclick="switchTab('jemput',this)">🚗 Jemput</button>
+  <button class="tab-btn" onclick="switchTab('monitor',this)">📊 Monitor</button>
+  <button class="tab-btn" onclick="switchTab('riwayat',this)">📋 Riwayat</button>
+  <button class="tab-btn" onclick="switchTab('siswa',this)">👧 Siswa</button>
+</div>
+
+<!-- TAB CHECK-IN -->
+<div class="tab-content active" id="tab-checkin">
+  <div class="container">
+    <div class="scanner-card">
+      <div class="scanner-header checkin"><div class="scanner-dot"></div>Scanner Check-in — Siswa Tiba di Sekolah</div>
+      <div id="reader-checkin"></div>
+    </div>
+    <div class="result-card">
+      <div class="result-status-bar waiting" id="statusBarCheckin">
+        <div class="status-icon">📱</div>
+        <div><div class="status-text waiting">Menunggu Scan...</div><div class="status-sub waiting">Scan QR Code siswa saat tiba di sekolah</div></div>
+      </div>
+      <div class="foto-wrapper" id="fotoWrapperCheckin">
+        <div class="foto-inner valid-foto" id="fotoInnerCheckin">
+          <div class="foto-placeholder" id="fotoPlaceholderCheckin">👤</div>
+          <img class="foto-frame" id="fotoImgCheckin" src="" alt="" style="display:none;" onerror="this.style.display='none';document.getElementById('fotoPlaceholderCheckin').style.display='flex';">
+          <div class="foto-meta">
+            <div class="foto-nama" id="fotoNamaCheckin">-</div>
+            <div class="foto-kelas" id="fotoKelasCheckin">-</div>
+            <span class="foto-badge valid" id="fotoBadgeCheckin">✅ Hadir</span>
+          </div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="result-row"><span class="result-label">Nama Siswa</span><span class="result-value" id="ciNama">-</span></div>
+        <div class="result-row"><span class="result-label">Kelas</span><span class="result-value" id="ciKelas">-</span></div>
+        <div class="result-row"><span class="result-label">Waktu Masuk</span><span class="result-value" id="ciWaktu">-</span></div>
+        <div class="result-row"><span class="result-label">Status</span><span class="result-value" id="ciStatus">-</span></div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="action-btn btn-scan" onclick="resetCheckin()">🔄 Scan Ulang</button>
+      <button class="action-btn btn-wa" id="btnWaCheckin" onclick="kirimWaCheckin()" disabled>💬 Kirim WA</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAB PENJEMPUTAN -->
+<div class="tab-content" id="tab-jemput">
+  <div class="container">
+    <div class="scanner-card">
+      <div class="scanner-header jemput"><div class="scanner-dot"></div>Scanner Penjemputan Siswa</div>
+      <div id="reader-jemput"></div>
+    </div>
+    <div class="result-card">
+      <div class="result-status-bar waiting" id="statusBarJemput">
+        <div class="status-icon">📱</div>
+        <div><div class="status-text waiting">Menunggu Scan...</div><div class="status-sub waiting">Scan QR Code siswa saat dijemput</div></div>
+      </div>
+      <div class="foto-wrapper" id="fotoWrapperJemput">
+        <div class="foto-inner valid-foto" id="fotoInnerJemput">
+          <div class="foto-placeholder" id="fotoPlaceholderJemput">👤</div>
+          <img class="foto-frame" id="fotoImgJemput" src="" alt="" style="display:none;" onerror="this.style.display='none';document.getElementById('fotoPlaceholderJemput').style.display='flex';">
+          <div class="foto-meta">
+            <div class="foto-nama" id="fotoNamaJemput">-</div>
+            <div class="foto-kelas" id="fotoKelasJemput">-</div>
+            <span class="foto-badge valid" id="fotoBadgeJemput">✅ Valid</span>
+          </div>
+        </div>
+      </div>
+      <div class="result-body">
+        <div class="result-row"><span class="result-label">Nama Siswa</span><span class="result-value" id="jNama">-</span></div>
+        <div class="result-row"><span class="result-label">Kelas</span><span class="result-value" id="jKelas">-</span></div>
+        <div class="result-row"><span class="result-label">Penjemput Sah</span><span class="result-value" id="jPenjemput">-</span></div>
+        <div class="result-row"><span class="result-label">Waktu Masuk</span><span class="result-value" id="jWaktuMasuk">-</span></div>
+        <div class="result-row"><span class="result-label">Waktu Jemput</span><span class="result-value" id="jWaktu">-</span></div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="action-btn btn-scan" onclick="resetJemput()">🔄 Scan Ulang</button>
+      <button class="action-btn btn-wa" id="btnWaJemput" onclick="kirimWaJemput()" disabled>💬 Kirim WA</button>
+    </div>
+  </div>
+</div>
+
+<!-- TAB MONITORING -->
+<div class="tab-content" id="tab-monitor">
+  <div class="container">
+    <div class="monitoring-filter">
+      <button class="filter-btn active" onclick="filterMonitor('semua',this)">Semua</button>
+      <button class="filter-btn" onclick="filterMonitor('hadir',this)">✅ Hadir</button>
+      <button class="filter-btn" onclick="filterMonitor('menunggu',this)">⏳ Menunggu</button>
+      <button class="filter-btn" onclick="filterMonitor('dijemput',this)">🚗 Dijemput</button>
+      <button class="filter-btn" onclick="filterMonitor('belum',this)">❌ Belum Hadir</button>
+    </div>
+    <div id="monitorList"><div class="empty-state"><div class="empty-icon">📊</div><p>Memuat data monitoring...</p></div></div>
+  </div>
+</div>
+
+<!-- TAB RIWAYAT -->
+<div class="tab-content" id="tab-riwayat">
+  <div class="container">
+    <div class="riwayat-header">
+      <div class="riwayat-title">Riwayat Aktivitas Hari Ini</div>
+      <button class="clear-btn" onclick="clearLog()">Hapus Semua</button>
+    </div>
+    <div id="logList"><div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada aktivitas hari ini</p></div></div>
+  </div>
+</div>
+
+<!-- TAB DATA SISWA -->
+<div class="tab-content" id="tab-siswa">
+  <div class="container">
+    <button class="reload-btn" onclick="loadDatabase()">🔄 Refresh Data dari Google Sheets</button>
+    <div class="siswa-search">
+      <span class="search-icon">🔍</span>
+      <input type="text" id="searchInput" placeholder="Cari nama siswa..." oninput="filterSiswa(this.value)">
+    </div>
+    <div id="siswaList"><div class="empty-state"><div class="empty-icon">⏳</div><p>Memuat data siswa...</p></div></div>
+  </div>
+</div>
+
+<div class="wa-popup" id="waPopup">💬 Membuka WhatsApp...</div>
+
+<script>
+const SHEET_URL = "https://script.google.com/macros/s/AKfycbw-qeQJ7IWf5NAnNVwec2_4PlV2Ra-GsJkSfc4fT23iFdNwU6YTinfAwIn4KvrTJsRb/exec";
+
+let database = {};
+let hadirHariIni = {};
+let dijemputHariIni = {};
+let scanLog = [];
+let lastScannedCheckin = null;
+let lastScannedJemput = null;
+let currentCheckinData = null;
+let currentJemputData = null;
+let currentMonitorFilter = 'semua';
+let jemputScannerInit = false;
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('dateDisplay').textContent = now.toLocaleDateString('id-ID',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+function loadDatabase() {
+  const el = document.getElementById('dbStatus');
+  const txt = document.getElementById('dbStatusText');
+  el.className = 'db-status loading';
+  txt.textContent = 'Menghubungkan ke database Google Sheets...';
+  fetch(SHEET_URL + "?t=" + Date.now())
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(data => {
+      database = data;
+      const n = Object.keys(database).length;
+      el.className = 'db-status ok';
+      txt.textContent = '✓ Terhubung — ' + n + ' data siswa berhasil dimuat';
+      updateStats();
+      renderSiswa('');
+      renderMonitor(currentMonitorFilter);
+    })
+    .catch(() => {
+      el.className = 'db-status error';
+      txt.textContent = '✗ Gagal terhubung ke Google Sheets. Periksa koneksi internet.';
+    });
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-content').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(e => e.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'jemput' && !jemputScannerInit) {
+    setTimeout(() => { initScanner('reader-jemput', onScanJemput); jemputScannerInit = true; }, 300);
+  }
+  if (name === 'riwayat') renderLog();
+  if (name === 'siswa') renderSiswa(document.getElementById('searchInput').value);
+  if (name === 'monitor') renderMonitor(currentMonitorFilter);
+}
+
+function initScanner(readerId, callback) {
+  const qr = new Html5Qrcode(readerId);
+  Html5Qrcode.getCameras().then(devices => {
+    if (devices && devices.length) {
+      const cam = devices.find(d => d.label.toLowerCase().includes('back')) || devices[devices.length-1];
+      qr.start(cam.id, {fps:10, qrbox:{width:220,height:220}}, callback);
+    }
+  }).catch(e => console.warn("Kamera:", e));
+}
+
+// ===== CHECK-IN =====
+function onScanCheckin(code) {
+  if (code === lastScannedCheckin) return;
+  lastScannedCheckin = code;
+  const key = code.trim().toUpperCase();
+  const siswa = database[key];
+  const t = new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  if (siswa) {
+    if (hadirHariIni[key]) {
+      showResultFoto('checkin', 'warning', siswa, key,
+        `<div class="status-icon">⚠️</div><div><div class="status-text warning">Sudah Check-in</div><div class="status-sub warning">Siswa ini sudah tercatat hadir sebelumnya</div></div>`,
+        '⚠️ Sudah Hadir — ' + (hadirHariIni[key].waktu), 'warning');
+      document.getElementById('ciStatus').textContent = '⚠️ Sudah check-in pukul ' + hadirHariIni[key].waktu;
+      currentCheckinData = {siswa, key, t};
+      document.getElementById('btnWaCheckin').disabled = !siswa.noHP;
+    } else {
+      hadirHariIni[key] = {waktu: t, nama: siswa.nama, kelas: siswa.kelas};
+      showResultFoto('checkin', 'valid', siswa, key,
+        `<div class="status-icon">✅</div><div><div class="status-text valid">Check-in Berhasil!</div><div class="status-sub valid">Siswa tercatat hadir hari ini</div></div>`,
+        '✅ Hadir — ' + t, 'valid');
+      document.getElementById('ciStatus').textContent = '✅ Hadir';
+      addLog({type:'checkin', valid:true, nama:siswa.nama, kelas:siswa.kelas, emoji:siswa.emoji||'👤', foto:siswa.foto||'', time:t, code:key});
+      updateStats();
+      renderMonitor(currentMonitorFilter);
+      currentCheckinData = {siswa, key, t};
+      document.getElementById('btnWaCheckin').disabled = !siswa.noHP;
+    }
+    document.getElementById('ciNama').textContent = siswa.nama;
+    document.getElementById('ciKelas').textContent = siswa.kelas;
+    document.getElementById('ciWaktu').textContent = t;
+  } else {
+    document.getElementById('statusBarCheckin').className = 'result-status-bar invalid';
+    document.getElementById('statusBarCheckin').innerHTML = `<div class="status-icon">❌</div><div><div class="status-text invalid">QR Tidak Dikenali</div><div class="status-sub invalid">Hubungi petugas sekolah</div></div>`;
+    document.getElementById('fotoWrapperCheckin').classList.add('tampil');
+    document.getElementById('fotoInnerCheckin').className = 'foto-inner invalid-foto';
+    document.getElementById('fotoNamaCheckin').textContent = 'Tidak Dikenali';
+    document.getElementById('fotoKelasCheckin').textContent = 'QR tidak terdaftar';
+    document.getElementById('fotoBadgeCheckin').className = 'foto-badge invalid';
+    document.getElementById('fotoBadgeCheckin').textContent = '❌ Tidak Dikenali';
+    document.getElementById('fotoImgCheckin').style.display = 'none';
+    document.getElementById('fotoPlaceholderCheckin').style.display = 'flex';
+    document.getElementById('fotoPlaceholderCheckin').textContent = '❓';
+    document.getElementById('ciNama').textContent = '-';
+    document.getElementById('ciKelas').textContent = '-';
+    document.getElementById('ciWaktu').textContent = t;
+    document.getElementById('ciStatus').textContent = '❌ Tidak Valid';
+    addLog({type:'invalid', valid:false, nama:'QR Tidak Dikenali', kelas:'-', emoji:'❓', foto:'', time:t, code:key});
+    currentCheckinData = null;
+    document.getElementById('btnWaCheckin').disabled = true;
+  }
+  setTimeout(() => { lastScannedCheckin = null; }, 3000);
+}
+
+function resetCheckin() {
+  lastScannedCheckin = null; currentCheckinData = null;
+  document.getElementById('btnWaCheckin').disabled = true;
+  document.getElementById('statusBarCheckin').className = 'result-status-bar waiting';
+  document.getElementById('statusBarCheckin').innerHTML = `<div class="status-icon">📱</div><div><div class="status-text waiting">Menunggu Scan...</div><div class="status-sub waiting">Scan QR Code siswa saat tiba di sekolah</div></div>`;
+  ['ciNama','ciKelas','ciWaktu','ciStatus'].forEach(id => document.getElementById(id).textContent = '-');
+  document.getElementById('fotoWrapperCheckin').classList.remove('tampil');
+  document.getElementById('fotoImgCheckin').src = '';
+}
+
+// ===== PENJEMPUTAN =====
+function onScanJemput(code) {
+  if (code === lastScannedJemput) return;
+  lastScannedJemput = code;
+  const key = code.trim().toUpperCase();
+  const siswa = database[key];
+  const t = new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  if (siswa) {
+    if (!hadirHariIni[key]) {
+      showResultFoto('jemput', 'warning', siswa, key,
+        `<div class="status-icon">⚠️</div><div><div class="status-text warning">Siswa Tidak Hadir</div><div class="status-sub warning">Siswa ini tidak tercatat hadir hari ini</div></div>`,
+        '⚠️ Tidak Hadir Hari Ini', 'warning');
+      document.getElementById('jWaktuMasuk').textContent = 'Tidak hadir';
+      currentJemputData = null;
+      document.getElementById('btnWaJemput').disabled = true;
+    } else if (dijemputHariIni[key]) {
+      showResultFoto('jemput', 'warning', siswa, key,
+        `<div class="status-icon">⚠️</div><div><div class="status-text warning">Sudah Dijemput</div><div class="status-sub warning">Siswa sudah dijemput pukul ${dijemputHariIni[key].waktu}</div></div>`,
+        '⚠️ Sudah Dijemput — ' + dijemputHariIni[key].waktu, 'warning');
+      document.getElementById('jWaktuMasuk').textContent = hadirHariIni[key].waktu;
+      currentJemputData = null;
+      document.getElementById('btnWaJemput').disabled = true;
+    } else {
+      dijemputHariIni[key] = {waktu: t, penjemput: siswa.penjemput};
+      showResultFoto('jemput', 'valid', siswa, key,
+        `<div class="status-icon">✅</div><div><div class="status-text valid">Penjemputan Valid</div><div class="status-sub valid">Siswa boleh dibawa pulang</div></div>`,
+        '✅ Penjemputan Valid', 'valid');
+      document.getElementById('jWaktuMasuk').textContent = hadirHariIni[key].waktu;
+      addLog({type:'jemput', valid:true, nama:siswa.nama, kelas:siswa.kelas, emoji:siswa.emoji||'👤', foto:siswa.foto||'', time:t, code:key, penjemput:siswa.penjemput});
+      updateStats();
+      renderMonitor(currentMonitorFilter);
+      currentJemputData = {siswa, key, t};
+      document.getElementById('btnWaJemput').disabled = !siswa.noHP;
+    }
+    document.getElementById('jNama').textContent = siswa.nama;
+    document.getElementById('jKelas').textContent = siswa.kelas;
+    document.getElementById('jPenjemput').textContent = siswa.penjemput;
+    document.getElementById('jWaktu').textContent = t;
+  } else {
+    document.getElementById('statusBarJemput').className = 'result-status-bar invalid';
+    document.getElementById('statusBarJemput').innerHTML = `<div class="status-icon">❌</div><div><div class="status-text invalid">QR Tidak Dikenali</div><div class="status-sub invalid">Hubungi petugas sekolah</div></div>`;
+    document.getElementById('fotoWrapperJemput').classList.add('tampil');
+    document.getElementById('fotoInnerJemput').className = 'foto-inner invalid-foto';
+    document.getElementById('fotoNamaJemput').textContent = 'Tidak Dikenali';
+    document.getElementById('fotoKelasJemput').textContent = 'QR tidak terdaftar';
+    document.getElementById('fotoBadgeJemput').className = 'foto-badge invalid';
+    document.getElementById('fotoBadgeJemput').textContent = '❌ Tidak Dikenali';
+    document.getElementById('fotoImgJemput').style.display = 'none';
+    document.getElementById('fotoPlaceholderJemput').style.display = 'flex';
+    document.getElementById('fotoPlaceholderJemput').textContent = '❓';
+    ['jNama','jKelas','jPenjemput','jWaktuMasuk','jWaktu'].forEach(id => document.getElementById(id).textContent = id==='jWaktu'?t:'-');
+    addLog({type:'invalid', valid:false, nama:'QR Tidak Dikenali', kelas:'-', emoji:'❓', foto:'', time:t, code:key});
+    currentJemputData = null;
+    document.getElementById('btnWaJemput').disabled = true;
+  }
+  setTimeout(() => { lastScannedJemput = null; }, 3000);
+}
+
+function resetJemput() {
+  lastScannedJemput = null; currentJemputData = null;
+  document.getElementById('btnWaJemput').disabled = true;
+  document.getElementById('statusBarJemput').className = 'result-status-bar waiting';
+  document.getElementById('statusBarJemput').innerHTML = `<div class="status-icon">📱</div><div><div class="status-text waiting">Menunggu Scan...</div><div class="status-sub waiting">Scan QR Code siswa saat dijemput</div></div>`;
+  ['jNama','jKelas','jPenjemput','jWaktuMasuk','jWaktu'].forEach(id => document.getElementById(id).textContent = '-');
+  document.getElementById('fotoWrapperJemput').classList.remove('tampil');
+  document.getElementById('fotoImgJemput').src = '';
+}
+
+// ===== HELPER FOTO =====
+function showResultFoto(tab, status, siswa, key, barHTML, badgeText, badgeClass) {
+  const suffix = tab === 'checkin' ? 'Checkin' : 'Jemput';
+  document.getElementById('statusBar'+suffix).className = 'result-status-bar ' + status;
+  document.getElementById('statusBar'+suffix).innerHTML = barHTML;
+  document.getElementById('fotoWrapper'+suffix).classList.add('tampil');
+  document.getElementById('fotoInner'+suffix).className = 'foto-inner ' + status + '-foto';
+  document.getElementById('fotoNama'+suffix).textContent = siswa.nama;
+  document.getElementById('fotoKelas'+suffix).textContent = siswa.kelas;
+  document.getElementById('fotoBadge'+suffix).className = 'foto-badge ' + badgeClass;
+  document.getElementById('fotoBadge'+suffix).textContent = badgeText;
+  const img = document.getElementById('fotoImg'+suffix);
+  const ph = document.getElementById('fotoPlaceholder'+suffix);
+  if (siswa.foto && siswa.foto.startsWith('http')) {
+    img.src = siswa.foto; img.style.display = 'block'; ph.style.display = 'none';
+  } else {
+    img.style.display = 'none'; ph.style.display = 'flex'; ph.textContent = siswa.emoji||'👤';
+  }
+}
+
+// ===== NOTIFIKASI WA =====
+function kirimWaCheckin() {
+  if (!currentCheckinData) return;
+  const {siswa, t} = currentCheckinData;
+  const pesan = `Assalamu'alaikum Bapak/Ibu 🙏\n\nKami informasikan bahwa *${siswa.nama}* telah tiba di sekolah *Aisyah Cendekia Islamic School* pada pukul *${t}*.\n\nJazakallahu khairan. 🕌`;
+  window.open(`https://wa.me/${siswa.noHP}?text=${encodeURIComponent(pesan)}`, '_blank');
+  showWaPopup('✅ WhatsApp orang tua ' + siswa.nama + ' dibuka!');
+}
+
+function kirimWaJemput() {
+  if (!currentJemputData) return;
+  const {siswa, t} = currentJemputData;
+  const pesan = `Assalamu'alaikum Bapak/Ibu 🙏\n\nKami informasikan bahwa *${siswa.nama}* telah dijemput oleh *${siswa.penjemput}* dari *Aisyah Cendekia Islamic School* pada pukul *${t}*.\n\nJazakallahu khairan. 🕌`;
+  window.open(`https://wa.me/${siswa.noHP}?text=${encodeURIComponent(pesan)}`, '_blank');
+  showWaPopup('✅ WhatsApp orang tua ' + siswa.nama + ' dibuka!');
+}
+
+function showWaPopup(msg) {
+  const p = document.getElementById('waPopup');
+  p.textContent = msg;
+  p.classList.add('show');
+  setTimeout(() => p.classList.remove('show'), 3000);
+}
+
+// ===== MONITORING =====
+function filterMonitor(filter, btn) {
+  currentMonitorFilter = filter;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderMonitor(filter);
+}
+
+function renderMonitor(filter) {
+  const el = document.getElementById('monitorList');
+  const keys = Object.keys(database);
+  if (!keys.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><p>Data belum termuat</p></div>`; return; }
+  const filtered = keys.filter(key => {
+    const hadir = hadirHariIni[key];
+    const dijemput = dijemputHariIni[key];
+    if (filter === 'hadir') return hadir && !dijemput;
+    if (filter === 'menunggu') return hadir && !dijemput;
+    if (filter === 'dijemput') return !!dijemput;
+    if (filter === 'belum') return !hadir;
+    return true;
+  });
+  if (!filtered.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Tidak ada data</p></div>`; return; }
+  el.innerHTML = filtered.map(key => {
+    const s = database[key];
+    const hadir = hadirHariIni[key];
+    const dijemput = dijemputHariIni[key];
+    let badge, time;
+    if (dijemput) { badge = `<span class="status-badge dijemput">🚗 Dijemput</span>`; time = `<div class="monitor-time">${dijemput.waktu}</div>`; }
+    else if (hadir) { badge = `<span class="status-badge hadir">✅ Hadir</span>`; time = `<div class="monitor-time">${hadir.waktu}</div>`; }
+    else { badge = `<span class="status-badge belum">⏳ Belum Hadir</span>`; time = ''; }
+    const fotoHtml = (s.foto && s.foto.startsWith('http'))
+      ? `<img class="monitor-foto" src="${s.foto}" onerror="this.outerHTML='<div class=\\'monitor-foto-placeholder\\'>${s.emoji||'👤'}</div>'">`
+      : `<div class="monitor-foto-placeholder">${s.emoji||'👤'}</div>`;
+    return `<div class="monitor-card">${fotoHtml}<div class="monitor-info"><div class="monitor-nama">${s.nama}</div><div class="monitor-detail">${s.kelas} · ${s.penjemput}</div></div><div class="monitor-status">${badge}${time}</div></div>`;
+  }).join('');
+}
+
+// ===== LOG =====
+function addLog(e) { scanLog.unshift(e); }
+function renderLog() {
+  const el = document.getElementById('logList');
+  if (!scanLog.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Belum ada aktivitas hari ini</p></div>`; return; }
+  el.innerHTML = scanLog.map(e => {
+    const av = (e.foto && e.foto.startsWith('http'))
+      ? `<img src="${e.foto}" style="width:40px;height:40px;border-radius:10px;object-fit:cover;" onerror="this.outerHTML='<div class=\\'log-avatar ${e.type}\\'>${e.emoji}</div>'">`
+      : `<div class="log-avatar ${e.type}">${e.emoji}</div>`;
+    const label = e.type==='checkin'?'✅ Check-in':e.type==='jemput'?'🚗 Dijemput':'❌ Tidak Valid';
+    const detail = e.type==='jemput'?`${e.kelas} · ${e.penjemput}`:e.kelas!=='-'?e.kelas:'Kode: '+e.code;
+    return `<div class="log-item">${av}<div class="log-info"><div class="log-name">${e.nama}</div><div class="log-detail">${detail}</div><span class="log-type ${e.type}">${label}</span></div><div class="log-time">${e.time}</div></div>`;
+  }).join('');
+}
+function clearLog() { if (confirm('Hapus semua riwayat?')) { scanLog=[]; renderLog(); } }
+
+// ===== STATS =====
+function updateStats() {
+  const total = Object.keys(database).length;
+  const hadir = Object.keys(hadirHariIni).length;
+  const dijemput = Object.keys(dijemputHariIni).length;
+  document.getElementById('statSiswa').textContent = total||'-';
+  document.getElementById('statHadir').textContent = hadir;
+  document.getElementById('statBelum').textContent = Math.max(0, total-hadir);
+  document.getElementById('statMenunggu').textContent = Math.max(0, hadir-dijemput);
+  document.getElementById('statDijemput').textContent = dijemput;
+}
+
+// ===== DATA SISWA =====
+function renderSiswa(query) {
+  const el = document.getElementById('siswaList');
+  const keys = Object.keys(database);
+  if (!keys.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Data belum termuat</p></div>`; return; }
+  const q = query.toLowerCase();
+  const filtered = keys.filter(code => {
+    const s = database[code];
+    return s.nama.toLowerCase().includes(q)||s.kelas.toLowerCase().includes(q)||code.toLowerCase().includes(q);
+  });
+  if (!filtered.length) { el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Siswa tidak ditemukan</p></div>`; return; }
+  el.innerHTML = filtered.map(code => {
+    const s = database[code];
+    const fotoHtml = (s.foto && s.foto.startsWith('http'))
+      ? `<img class="siswa-avatar" src="${s.foto}" onerror="this.outerHTML='<div class=\\'siswa-avatar-placeholder\\'>${s.emoji||'👤'}</div>'">`
+      : `<div class="siswa-avatar-placeholder">${s.emoji||'👤'}</div>`;
+    return `<div class="siswa-card">${fotoHtml}<div class="siswa-info"><div class="siswa-name">${s.nama}</div><div class="siswa-detail">${s.kelas} · ${s.penjemput} · 📱${s.noHP||'-'}</div></div><div class="siswa-qr">${code}</div></div>`;
+  }).join('');
+}
+function filterSiswa(val) { renderSiswa(val); }
+
+// ===== INIT =====
+loadDatabase();
+initScanner('reader-checkin', onScanCheckin);
+</script>
+</body>
+</html>
